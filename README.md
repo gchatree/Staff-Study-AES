@@ -69,8 +69,15 @@ During Phase 2 experimental benchmarking, we evaluated two local execution strat
 2. Create environment configuration file:
    ```bash
    cp .env.example .env
+
+> 📖 **คู่มือการขอรับ API Key:** อ่านขั้นตอนการขอรับ API Key อย่างละเอียดจาก Google AI Studio และ Anthropic Console ได้ที่ [API_KEY_GUIDE.md](API_KEY_GUIDE.md)
+
+> 📖 **API Key Guide:** For a detailed step-by-step tutorial on obtaining API keys from Google AI Studio and Anthropic Console, please refer to [API_KEY_GUIDE.md](API_KEY_GUIDE.md).
    ```
-3. Fill in your API keys in `.env` (if using Cloud Models like OpenAI, Anthropic Claude, or Google Gemini).
+3. **Configure API Keys (for Cloud Models):**  
+   Open `.env` in any text editor and paste your API keys:
+   - **Google Gemini API Key:** Get key from [Google AI Studio](https://aistudio.google.com) ➔ Set `GOOGLE_API_KEY=your_key`
+   - **Anthropic Claude API Key:** Get key from [Anthropic Console](https://console.anthropic.com) ➔ Set `ANTHROPIC_API_KEY=your_key`
 
 ### Step 3: Launch Services via Docker Compose
 Start the Python FastAPI Scoring Engine and n8n Pipeline:
@@ -78,10 +85,21 @@ Start the Python FastAPI Scoring Engine and n8n Pipeline:
 docker-compose -f docker/docker-compose.yml up -d
 ```
 
-### Step 4: Access n8n & Import Workflows
+### Step 4: Access n8n, Import Workflows & Configure Credentials
 1. Open your browser and navigate to `http://localhost:5678`.
 2. Set up your n8n account.
 3. Navigate to **Workflows -> Import from File** and select any `.json` workflow file from the `n8n/workflow/` directory.
+
+#### 🔑 Configuring Credentials for Cloud Workflows in n8n:
+- **Google Gemini (`Rubric Assessment Workflow (gemini-3.5-flash).json`):**
+  1. Double-click node **`Call Gemini API Direct`**
+  2. Under Authentication ➔ Select **Generic Credential Type** ➔ **Query Auth**
+  3. Create Credential: Set **Name:** `key` | Set **Value:** `YOUR_GOOGLE_GEMINI_API_KEY` (from [Google AI Studio](https://aistudio.google.com))
+
+- **Anthropic Claude (`Rubric Assessment Workflow (claude-sonnet-5).json`):**
+  1. Double-click node **`Call Claude API Direct`**
+  2. Under Authentication ➔ Select **Generic Credential Type** ➔ **Header Auth**
+  3. Create Credential: Set **Name:** `x-api-key` | Set **Value:** `YOUR_ANTHROPIC_CLAUDE_API_KEY` (from [Anthropic Console](https://console.anthropic.com))
 
 ---
 
@@ -200,7 +218,10 @@ Distributed under the MIT License. See `LICENSE` for more information.
    ```bash
    cp .env.example .env
    ```
-3. กรอก API Keys ของท่านในไฟล์ `.env` (หากต้องการใช้งาน Cloud Models เช่น OpenAI, Anthropic Claude, หรือ Google Gemini)
+3. **กรอก API Keys สำหรับ Cloud Models (สำคัญก่อนกด Execute):**  
+   เปิดไฟล์ `.env` ด้วยข้อความ แล้วใส่คีย์ของท่านดังนี้:
+   - **Google Gemini API Key:** ขอรับคีย์ฟรีที่ [Google AI Studio](https://aistudio.google.com) ➔ ใส่ใน `GOOGLE_API_KEY=รหัสคีย์จริง`
+   - **Anthropic Claude API Key:** ขอรับคีย์ที่ [Anthropic Console](https://console.anthropic.com) ➔ ใส่ใน `ANTHROPIC_API_KEY=รหัสคีย์จริง`
 
 ### ขั้นตอนที่ 3: เปิดใช้งานระบบด้วย Docker Compose
 สั่งรัน Python FastAPI Scoring Engine และระบบ n8n:
@@ -208,10 +229,21 @@ Distributed under the MIT License. See `LICENSE` for more information.
 docker-compose -f docker/docker-compose.yml up -d
 ```
 
-### ขั้นตอนที่ 4: เข้าใช้งาน n8n และนำเข้า Workflows
+### ขั้นตอนที่ 4: เข้าใช้งาน n8n, นำเข้า Workflows และตั้งค่า Credentials
 1. เปิดเว็บเบราว์เซอร์ไปที่ `http://localhost:5678`
 2. ตั้งค่าบัญชีผู้ใช้ n8n
 3. ไปที่เมนู **Workflows -> Import from File** แล้วเลือกไฟล์ `.json` จากโฟลเดอร์ `n8n/workflow/` ที่ต้องการทดสอบ
+
+#### 🔑 การตั้งค่า Credential สำหรับ Cloud Workflows ใน n8n:
+- **Google Gemini (`Rubric Assessment Workflow (gemini-3.5-flash).json`):**
+  1. ดับเบิลคลิกเปิด Node **`Call Gemini API Direct`**
+  2. ที่หัวข้อ Authentication ➔ เลือก **Generic Credential Type** ➔ **Query Auth**
+  3. สร้าง Credential: กำหนด **Name:** `key` | กำหนด **Value:** ใส่รหัส Google Gemini API Key (ขอรับฟรีที่ [Google AI Studio](https://aistudio.google.com))
+
+- **Anthropic Claude (`Rubric Assessment Workflow (claude-sonnet-5).json`):**
+  1. ดับเบิลคลิกเปิด Node **`Call Claude API Direct`**
+  2. ที่หัวข้อ Authentication ➔ เลือก **Generic Credential Type** ➔ **Header Auth**
+  3. สร้าง Credential: กำหนด **Name:** `x-api-key` | กำหนด **Value:** ใส่รหัส Anthropic Claude API Key (ขอรับที่ [Anthropic Console](https://console.anthropic.com))
 
 ---
 
