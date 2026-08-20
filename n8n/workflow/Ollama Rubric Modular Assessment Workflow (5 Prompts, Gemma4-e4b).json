@@ -1,0 +1,542 @@
+{
+  "name": "Ollama Rubric Modular Assessment Workflow (5 Prompts, Gemma4-e4b)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        4096,
+        -208
+      ],
+      "id": "161614ea-89e1-48ef-a11a-254531ce7809",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/list-assess-pending",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4336,
+        -208
+      ],
+      "id": "0192436a-cd0a-4874-9681-359856368f17",
+      "name": "List Assess Pending API"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        4576,
+        -208
+      ],
+      "id": "ae8b96dd-4620-4d6b-b3c6-c810da70eb23",
+      "name": "Loop Each File"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_P",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4832,
+        -192
+      ],
+      "id": "edfb11e8-6333-4459-9628-563c344eba17",
+      "name": "Get Prompt P"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"gemma4:latest\", messages: [ { role: \"user\", content: $('Get Prompt P').item.json.prompt.replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content)) } ], think: false, format: \"json\", options: { temperature: 0, num_ctx: 32768, top_p: 0.8, top_k: 20 }, stream: false }) }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4944,
+        -192
+      ],
+      "id": "9c799537-df91-4920-9592-b046968610d4",
+      "name": "Call Ollama P"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_F",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4704,
+        -32
+      ],
+      "id": "98aacb74-e902-4422-bdb1-a6b97944915f",
+      "name": "Get Prompt F"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p_txt = $('Call Ollama P').item.json.message.content;\nlet issues = \"[]\";\ntry {\n  issues = JSON.stringify(JSON.parse(p_txt.replace(/```json|```/g, \"\").trim()).issues_from_problem || []);\n} catch (e) {}\n\nconst prompt_f = $('Get Prompt F').item.json.prompt\n  .replace('%%ISSUES_FROM_PROBLEM%%', issues)\n  .replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content));\n\nconst body = {\n  model: \"gemma4:latest\",\n  messages: [ { role: \"user\", content: prompt_f } ],\n  think: false,\n  format: \"json\",\n  options: { temperature: 0, num_ctx: 32768, top_p: 0.8, top_k: 20 },\n  stream: false\n};\n\nreturn [{ json: { body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4832,
+        -32
+      ],
+      "id": "97372f9a-0d94-49c0-9ded-3f1396aa5d41",
+      "name": "Build Body F"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4944,
+        -32
+      ],
+      "id": "a3aae5ab-f1f5-4a33-9b50-2e128bea1b3a",
+      "name": "Call Ollama F"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_C",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4704,
+        128
+      ],
+      "id": "4873d4db-88db-4d7b-8e21-38dc55673b85",
+      "name": "Get Prompt C"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p_txt = $('Call Ollama P').item.json.message.content;\nlet issues = \"[]\";\ntry {\n  issues = JSON.stringify(JSON.parse(p_txt.replace(/```json|```/g, \"\").trim()).issues_from_problem || []);\n} catch (e) {}\n\nconst prompt_c = $('Get Prompt C').item.json.prompt\n  .replace('%%ISSUES_FROM_PROBLEM%%', issues)\n  .replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content));\n\nconst body = {\n  model: \"gemma4:latest\",\n  messages: [ { role: \"user\", content: prompt_c } ],\n  think: false,\n  format: \"json\",\n  options: { temperature: 0, num_ctx: 32768, top_p: 0.8, top_k: 20 },\n  stream: false\n};\n\nreturn [{ json: { body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4832,
+        128
+      ],
+      "id": "add556b7-88ed-4e27-89fd-610c312df2b9",
+      "name": "Build Body C"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4944,
+        128
+      ],
+      "id": "e8b13c75-5685-43e3-b057-1c585779671e",
+      "name": "Call Ollama C"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_R",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4704,
+        288
+      ],
+      "id": "fe6025a2-9a04-411c-9dd7-fc2b4d9f81f1",
+      "name": "Get Prompt R"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p_txt = $('Call Ollama P').item.json.message.content;\nlet issues = \"[]\";\ntry {\n  issues = JSON.stringify(JSON.parse(p_txt.replace(/```json|```/g, \"\").trim()).issues_from_problem || []);\n} catch (e) {}\n\nconst prompt_r = $('Get Prompt R').item.json.prompt\n  .replace('%%ISSUES_FROM_PROBLEM%%', issues)\n  .replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content));\n\nconst body = {\n  model: \"gemma4:latest\",\n  messages: [ { role: \"user\", content: prompt_r } ],\n  think: false,\n  format: \"json\",\n  options: { temperature: 0, num_ctx: 32768, top_p: 0.8, top_k: 20 },\n  stream: false\n};\n\nreturn [{ json: { body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4832,
+        288
+      ],
+      "id": "56872803-65be-4979-9245-53e189fbbe5a",
+      "name": "Build Body R"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4944,
+        288
+      ],
+      "id": "9a262ddb-df67-4c05-bb5c-bd65593a7cfc",
+      "name": "Call Ollama R"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_S",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4704,
+        448
+      ],
+      "id": "906fff47-1c1b-4e5a-b19b-8a72e262ddb8",
+      "name": "Get Prompt S"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p_txt = $('Call Ollama P').item.json.message.content;\nlet issues = \"[]\";\ntry {\n  issues = JSON.stringify(JSON.parse(p_txt.replace(/```json|```/g, \"\").trim()).issues_from_problem || []);\n} catch (e) {}\n\nconst prompt_s = $('Get Prompt S').item.json.prompt\n  .replace('%%ISSUES_FROM_PROBLEM%%', issues)\n  .replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content));\n\nconst body = {\n  model: \"gemma4:latest\",\n  messages: [ { role: \"user\", content: prompt_s } ],\n  think: false,\n  format: \"json\",\n  options: { temperature: 0, num_ctx: 32768, top_p: 0.8, top_k: 20 },\n  stream: false\n};\n\nreturn [{ json: { body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4832,
+        448
+      ],
+      "id": "5935628e-5bea-4ced-8503-25710ecc41d1",
+      "name": "Build Body S"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4944,
+        448
+      ],
+      "id": "3f9e5c2f-0b8c-4f6c-92f4-72b415a8bfaa",
+      "name": "Call Ollama S"
+    },
+    {
+      "parameters": {
+        "jsCode": "function cleanJson(txt) {\n  if (!txt) return {};\n  const cleaned = txt.replace(/```json|```/g, \"\").trim();\n  const start = cleaned.indexOf(\"{\");\n  const end = cleaned.lastIndexOf(\"}\");\n  if (start !== -1 && end !== -1) {\n    try { return JSON.parse(cleaned.substring(start, end + 1)); } catch(e) {}\n  }\n  return {};\n}\n\nconst p_resp = $('Call Ollama P').item.json;\nconst f_resp = $('Call Ollama F').item.json;\nconst c_resp = $('Call Ollama C').item.json;\nconst r_resp = $('Call Ollama R').item.json;\nconst s_resp = $('Call Ollama S').item.json;\n\nconst p_obj = cleanJson(p_resp?.message?.content);\nconst f_obj = cleanJson(f_resp?.message?.content);\nconst c_obj = cleanJson(c_resp?.message?.content);\nconst r_obj = cleanJson(r_resp?.message?.content);\nconst s_obj = cleanJson(s_resp?.message?.content);\n\nconst merged = {\n  issues_from_problem: p_obj.issues_from_problem || [],\n  results: {\n    ...(p_obj.results || {}),\n    ...(f_obj.results || {}),\n    ...(c_obj.results || {}),\n    ...(r_obj.results || {}),\n    ...(s_obj.results || {})\n  },\n  S_level: (s_obj.S_level !== undefined ? s_obj.S_level : 0)\n};\n\nconst total_prompt_tokens = (p_resp.prompt_eval_count || 0) + (f_resp.prompt_eval_count || 0) + (c_resp.prompt_eval_count || 0) + (r_resp.prompt_eval_count || 0) + (s_resp.prompt_eval_count || 0);\nconst total_completion_tokens = (p_resp.eval_count || 0) + (f_resp.eval_count || 0) + (c_resp.eval_count || 0) + (r_resp.eval_count || 0) + (s_resp.eval_count || 0);\n\nreturn [{\n  json: {\n    text: JSON.stringify(merged),\n    prompt_tokens: total_prompt_tokens,\n    completion_tokens: total_completion_tokens,\n    total_tokens: total_prompt_tokens + total_completion_tokens\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5184,
+        448
+      ],
+      "id": "55095491-cae9-471a-a9fb-d105fc9dcada",
+      "name": "Merge 5 Criterion Responses"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://my-python-api:5000/assess-expand-tokens",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_name",
+              "value": "={{ $('Loop Each File').item.json.fileName }}"
+            },
+            {
+              "name": "raw_response",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "prompt_tokens",
+              "value": "={{ $json.prompt_tokens }}"
+            },
+            {
+              "name": "completion_tokens",
+              "value": "={{ $json.completion_tokens }}"
+            },
+            {
+              "name": "total_tokens",
+              "value": "={{ $json.total_tokens }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5312,
+        448
+      ],
+      "id": "506ead87-8aa8-4266-b8ba-6e94797ec823",
+      "name": "Assess Expand Tokens API"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Assess Pending API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Assess Pending API": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Each File": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Prompt P",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt P": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama P",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama P": {
+      "main": [
+        [
+          {
+            "node": "Get Prompt F",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt F": {
+      "main": [
+        [
+          {
+            "node": "Build Body F",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Body F": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama F",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama F": {
+      "main": [
+        [
+          {
+            "node": "Get Prompt C",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt C": {
+      "main": [
+        [
+          {
+            "node": "Build Body C",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Body C": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama C",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama C": {
+      "main": [
+        [
+          {
+            "node": "Get Prompt R",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt R": {
+      "main": [
+        [
+          {
+            "node": "Build Body R",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Body R": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama R",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama R": {
+      "main": [
+        [
+          {
+            "node": "Get Prompt S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt S": {
+      "main": [
+        [
+          {
+            "node": "Build Body S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Body S": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama S",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama S": {
+      "main": [
+        [
+          {
+            "node": "Merge 5 Criterion Responses",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge 5 Criterion Responses": {
+      "main": [
+        [
+          {
+            "node": "Assess Expand Tokens API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assess Expand Tokens API": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "d324a9b2-d65e-4678-b5e0-1674d58d7aa1",
+  "meta": {
+    "instanceId": "d5b7a637105e2789991513fc758cd33e8d77299e88fe465fbca853280e12de73"
+  },
+  "id": "4dXfRUNEZxaXSNWqReBRS",
+  "tags": []
+}

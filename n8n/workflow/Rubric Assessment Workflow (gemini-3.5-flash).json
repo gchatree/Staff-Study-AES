@@ -1,0 +1,287 @@
+{
+  "name": "Rubric Assessment Workflow (gemini-3.5-flash)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        224,
+        -112
+      ],
+      "id": "eaa928ce-df07-436b-9a4e-8ee45ee479ae",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/list-assess-pending",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        464,
+        -112
+      ],
+      "id": "401a291f-e174-4c32-a466-84c4a1f4eb15",
+      "name": "List Assess Pending API"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        704,
+        -112
+      ],
+      "id": "7e326670-abfe-4bc3-948e-af3732dbf904",
+      "name": "Loop Each File"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_local",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        -96
+      ],
+      "id": "0a870234-35f3-4e15-b78c-1d9a7b894c0d",
+      "name": "Get Prompt Template"
+    },
+    {
+      "parameters": {
+        "jsCode": "// จับเวลาเริ่มก่อนเรียกโมเดล (ms, epoch)\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    ...item.json,\n    startTime: Date.now()\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -96
+      ],
+      "id": "a3d4e383-bf43-485f-8cce-4d816ea666c9",
+      "name": "Start Timer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [ { parts: [ { text: $('Get Prompt Template').item.json.prompt.replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content)) } ] } ], generationConfig: { temperature: 0 } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1296,
+        -96
+      ],
+      "id": "19a4167c-23b4-45cf-bd49-6e202bb9f7f1",
+      "name": "Call Gemini API Direct",
+      "notesInFlow": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "1vsYBAd83RMLEk91",
+          "name": "Google Gemini(PaLM) Api account 2"
+        },
+        "httpQueryAuth": {
+          "id": "bxCLrUIrlq9mOUMe",
+          "name": "Query Auth account"
+        }
+      },
+      "notes": "เรียก generateContent ตรง (ไม่ผ่าน chainLlm) เพื่อให้ได้ usageMetadata (token จริง) ติดมาในคำตอบ — credential ใช้ตัวเดียวกับที่ node 'Google Gemini Chat Model' ในสองไฟล์เดิมใช้อยู่ ถ้า dropdown ใน n8n ไม่เจอ authentication type นี้ ให้เปลี่ยนเป็น Generic Credential Type -> Query Auth แล้วใส่ API key เป็น query param ชื่อ key แทน"
+    },
+    {
+      "parameters": {
+        "jsCode": "// แกะข้อความคำตอบ + token usage จาก response ของ Gemini generateContent ตรง\n// พร้อมคำนวณเวลาที่ใช้ (ms) เทียบกับ Start Timer\nconst resp = $input.item.json;\nconst startTime = $('Start Timer').item.json.startTime;\nconst elapsed_ms = Date.now() - startTime;\n\nconst text = resp?.candidates?.[0]?.content?.parts?.[0]?.text || '';\nconst usage = resp?.usageMetadata || {};\n\nreturn [{\n  json: {\n    text,\n    elapsed_ms,\n    prompt_tokens: usage.promptTokenCount ?? null,\n    completion_tokens: usage.candidatesTokenCount ?? null,\n    total_tokens: usage.totalTokenCount ?? null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        -96
+      ],
+      "id": "c85db59e-9db0-4adf-80ef-4157deedb097",
+      "name": "Extract Response + Tokens"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://my-python-api:5000/assess-expand-tokens",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_name",
+              "value": "={{ $('Loop Each File').item.json.fileName }}"
+            },
+            {
+              "name": "raw_response",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "elapsed_ms",
+              "value": "={{ $json.elapsed_ms }}"
+            },
+            {
+              "name": "prompt_tokens",
+              "value": "={{ $json.prompt_tokens }}"
+            },
+            {
+              "name": "completion_tokens",
+              "value": "={{ $json.completion_tokens }}"
+            },
+            {
+              "name": "total_tokens",
+              "value": "={{ $json.total_tokens }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1744,
+        -96
+      ],
+      "id": "4b0a24ab-0d96-4041-984d-640716492345",
+      "name": "Assess Expand Tokens API"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1984,
+        -96
+      ],
+      "id": "ed43ba7b-8090-4156-a962-da21d308ac86",
+      "name": "Wait 15s (RPM Guard)",
+      "webhookId": "d2e3f4a5-6666-4f66-9f66-666666666666"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Assess Pending API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Assess Pending API": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Each File": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Prompt Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt Template": {
+      "main": [
+        [
+          {
+            "node": "Start Timer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Timer": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini API Direct",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini API Direct": {
+      "main": [
+        [
+          {
+            "node": "Extract Response + Tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Response + Tokens": {
+      "main": [
+        [
+          {
+            "node": "Assess Expand Tokens API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assess Expand Tokens API": {
+      "main": [
+        [
+          {
+            "node": "Wait 15s (RPM Guard)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 15s (RPM Guard)": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "66922fa3-ac7c-47c1-b7d4-cdf7d876a44c",
+  "meta": {
+    "instanceId": "d5b7a637105e2789991513fc758cd33e8d77299e88fe465fbca853280e12de73"
+  },
+  "id": "HkWg6CCJCbAWeTI5TjXfB",
+  "tags": []
+}

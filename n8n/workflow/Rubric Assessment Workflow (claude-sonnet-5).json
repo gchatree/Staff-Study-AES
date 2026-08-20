@@ -1,0 +1,292 @@
+{
+  "name": "Rubric Assessment Workflow (claude-sonnet-5)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1bf20578-c9c6-49ed-aa50-633dc65b95f0",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/list-assess-pending",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "9051a23e-c05e-4942-ac78-9528d67744c6",
+      "name": "List Assess Pending API"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        480,
+        0
+      ],
+      "id": "0a1716cb-b938-4a13-9656-b5138c23bc1b",
+      "name": "Loop Each File"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_local",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        16
+      ],
+      "id": "d6fc4dd4-e4c8-45e3-95ea-67d6e7d06574",
+      "name": "Get Prompt Template"
+    },
+    {
+      "parameters": {
+        "jsCode": "// จับเวลาเริ่มก่อนเรียกโมเดล (ms, epoch)\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    ...item.json,\n    startTime: Date.now()\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        928,
+        16
+      ],
+      "id": "78c7587c-ce49-4a39-a5db-2a2992fec10e",
+      "name": "Start Timer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 30000, messages: [ { role: 'user', content: $('Get Prompt Template').item.json.prompt.replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content)) } ], output_config: { effort: 'low' } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "e0ad3b64-83f5-421d-940f-6f9d59376aad",
+      "name": "Call Claude API Direct",
+      "notesInFlow": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ijgf3pUpaRW1HPOU",
+          "name": "Header Auth account 2"
+        }
+      },
+      "notes": "เรียก Anthropic Messages API ตรง — auth เป็น Header Auth (x-api-key) ไม่ใช่ Query Auth แบบ Gemini ต้องสร้าง credential ใหม่ประเภท Generic Credential Type -> Header Auth โดย Name = x-api-key, Value = API key จาก console.anthropic.com นอกจากนี้ยังต้องมี header 'anthropic-version' เสมอ (ใส่ไว้ใน headerParameters แล้ว) model ระบุอยู่ใน body (field 'model') ไม่ใช่ใน URL — เปลี่ยนรุ่น Claude ทีหลังแค่แก้ค่านี้ ไม่ต้องแก้ URL — effort ตั้งเป็น 'low' เพื่อลด thinking token/เวลา/ต้นทุน (ค่า default ของ Sonnet 5 คือ 'high') ถ้าพบว่า ICC/MAE แย่ลงจากการลด effort ให้ลองขยับเป็น 'medium' แทน"
+    },
+    {
+      "parameters": {
+        "jsCode": "// แกะข้อความคำตอบ + token usage จาก response ของ Anthropic Messages API\n// พร้อมคำนวณเวลาที่ใช้ (ms) เทียบกับ Start Timer\nconst resp = $input.item.json;\nconst startTime = $('Start Timer').item.json.startTime;\nconst elapsed_ms = Date.now() - startTime;\nconst text = resp?.content?.find(b => b.type === 'text')?.text || '';\nconst usage = resp?.usage || {};\nconst prompt_tokens = usage.input_tokens ?? null;\nconst completion_tokens = usage.output_tokens ?? null;\nconst total_tokens = (prompt_tokens != null && completion_tokens != null)\n  ? prompt_tokens + completion_tokens\n  : null;\n// stop_reason: 'end_turn' = ตอบจบเองตามปกติ, 'max_tokens' = ถูกตัดเพราะชนเพดาน\n// (ไว้เผื่อ debug — ไม่ได้ส่งต่อไป endpoint เพราะ /assess-expand-tokens\n// ไม่มี field นี้ ถ้าคำตอบถูกตัดจริง JSON จะไม่สมบูรณ์และ endpoint\n// จะ reject เองอยู่แล้วตามดีไซน์ fail-closed เดิม)\nconst stop_reason = resp?.stop_reason ?? null;\n\nreturn [{\n  json: {\n    text,\n    elapsed_ms,\n    prompt_tokens,\n    completion_tokens,\n    total_tokens,\n    stop_reason\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        16
+      ],
+      "id": "a18cdce8-27c8-4041-9d20-509c88105cdb",
+      "name": "Extract Response + Tokens (Claude)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://my-python-api:5000/assess-expand-tokens",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_name",
+              "value": "={{ $('Loop Each File').item.json.fileName }}"
+            },
+            {
+              "name": "raw_response",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "elapsed_ms",
+              "value": "={{ $json.elapsed_ms }}"
+            },
+            {
+              "name": "prompt_tokens",
+              "value": "={{ $json.prompt_tokens }}"
+            },
+            {
+              "name": "completion_tokens",
+              "value": "={{ $json.completion_tokens }}"
+            },
+            {
+              "name": "total_tokens",
+              "value": "={{ $json.total_tokens }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1536,
+        16
+      ],
+      "id": "ba94d6f2-9d71-40dc-a6b3-d9815836762d",
+      "name": "Assess Expand Tokens API"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1728,
+        16
+      ],
+      "id": "d3d75dfe-af41-4469-ae47-336c71f60d59",
+      "name": "Wait (RPM Guard)",
+      "webhookId": "d2e3f4a5-6666-4f66-9f66-666666666666"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Assess Pending API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Assess Pending API": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Each File": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Prompt Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt Template": {
+      "main": [
+        [
+          {
+            "node": "Start Timer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Timer": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API Direct",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API Direct": {
+      "main": [
+        [
+          {
+            "node": "Extract Response + Tokens (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Response + Tokens (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Assess Expand Tokens API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assess Expand Tokens API": {
+      "main": [
+        [
+          {
+            "node": "Wait (RPM Guard)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait (RPM Guard)": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "75c444d6-5e93-408b-8f76-71359d5124a2",
+  "meta": {
+    "instanceId": "d5b7a637105e2789991513fc758cd33e8d77299e88fe465fbca853280e12de73"
+  },
+  "id": "3PDv91nVqVQ5BqdcJr89s",
+  "tags": []
+}

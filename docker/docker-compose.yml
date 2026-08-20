@@ -1,0 +1,73 @@
+name: aes-staff-study
+
+services:
+  n8n:
+    image: n8nio/n8n:2.4.4
+    container_name: aes-n8n
+    restart: unless-stopped
+    ports:
+      - "5679:5678"
+    environment:
+      - GENERIC_TIMEZONE=Asia/Bangkok
+      - TZ=Asia/Bangkok
+      - N8N_LOG_LEVEL=info
+      - N8N_LOG_OUTPUT=console
+      # File system access settings (required for n8n 2.x)
+      - N8N_FILE_SYSTEM_ACCESS_ENABLED=true
+      - N8N_FILE_SYSTEM_ACCESS_ALLOW_LIST=/home/node/.n8n-files
+      - N8N_BLOCK_FILE_ACCESS_TO_N8N_FILES=false
+      # Security settings for n8n 2.x (recommended)
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_RUNNERS_MODE=internal_childprocess
+      # Optional: Set encryption key (important for production)
+      # - N8N_ENCRYPTION_KEY=your-secure-encryption-key-here
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../data:/home/node/.n8n-files
+    networks:
+      - n8n_network
+    depends_on:
+      - tika
+      - my-python-api
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  tika:
+    image: apache/tika:2.9.2.1-full
+    container_name: aes-tika
+    restart: unless-stopped
+    ports:
+      - "9999:9998"
+    networks:
+      - n8n_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9998/tika"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  my-python-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: aes-python-api
+    restart: unless-stopped
+    ports:
+      - "5002:5000"
+    networks:
+      - n8n_network
+    volumes:
+      - ../api:/app
+      - ../data:/app/data
+
+networks:
+  n8n_network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    driver: local

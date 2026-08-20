@@ -1,0 +1,252 @@
+{
+  "name": "Ollama Rubric Assessment Workflow (qwen3-4b)",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        496
+      ],
+      "id": "1c267d81-c9d1-42d4-9981-ce33d3f9b137",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/list-assess-pending",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        496
+      ],
+      "id": "ccff858c-5f48-4fe7-9a7b-746c4669a957",
+      "name": "List Assess Pending API"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2000,
+        496
+      ],
+      "id": "008c7d26-fd54-4d60-9101-c83002347946",
+      "name": "Loop Each File"
+    },
+    {
+      "parameters": {
+        "url": "http://my-python-api:5000/prompt/Rubric_prompt_local_01",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        512
+      ],
+      "id": "cb95303c-3dd2-4da7-b0b6-4638022d17b6",
+      "name": "Get Prompt Template"
+    },
+    {
+      "parameters": {
+        "jsCode": "// จับเวลาเริ่มก่อนเรียกโมเดล (ms, epoch)\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    ...item.json,\n    startTime: Date.now()\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        512
+      ],
+      "id": "897e9120-c837-4d31-9626-1e8c5979f2f2",
+      "name": "Start Timer"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/chat",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: \"qwen3:4b\", messages: [ { role: \"user\", content: $('Get Prompt Template').item.json.prompt.replace('%%ESSAY_JSON%%', JSON.stringify($('Loop Each File').item.json.content)) } ], think:false, options: { temperature: 0, num_ctx: 32768 }, stream: false }) }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2592,
+        512
+      ],
+      "id": "7bfdb3de-19f4-4661-a5e3-f1211b010815",
+      "name": "Call Ollama API",
+      "notesInFlow": true,
+      "notes": "ใช้ gemma3:4b (official จาก Google ไม่ใช่ fine-tune ภาษาไทย) — sanity test + JSON schema mimic test ผ่านดีทั้งคู่ (self-identify ถูก, JSON ตรง schema, evidence ไม่หลอน) ไม่มี thinking leak เหมือนตระกูล Qwen3 เป็นตัวแทน 'non-Thai-finetune, non-Qwen family' ตัวแรกที่ทดสอบเต็มรูปแบบ หลัง Typhoon2.5/Chinda (Thai fine-tune) แสดง leniency bias ทั้งคู่"
+    },
+    {
+      "parameters": {
+        "jsCode": "// แกะข้อความคำตอบ + token usage จาก response ของ Ollama /api/chat\n// พร้อมคำนวณเวลาที่ใช้ (ms) เทียบกับ Start Timer\nconst resp = $input.item.json;\nconst startTime = $('Start Timer').item.json.startTime;\nconst elapsed_ms = Date.now() - startTime;\n\nconst content = resp?.message?.content || '';\n\nreturn [{\n  json: {\n    text: content,\n    elapsed_ms,\n    prompt_tokens: resp.prompt_eval_count ?? null,\n    completion_tokens: resp.eval_count ?? null,\n    total_tokens: (resp.prompt_eval_count ?? 0) + (resp.eval_count ?? 0)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        512
+      ],
+      "id": "e08135df-3851-41a1-9ceb-47137a7652bf",
+      "name": "Extract Response + Tokens"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://my-python-api:5000/assess-expand-tokens",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_name",
+              "value": "={{ $('Loop Each File').item.json.fileName }}"
+            },
+            {
+              "name": "raw_response",
+              "value": "={{ $json.text }}"
+            },
+            {
+              "name": "elapsed_ms",
+              "value": "={{ $json.elapsed_ms }}"
+            },
+            {
+              "name": "prompt_tokens",
+              "value": "={{ $json.prompt_tokens }}"
+            },
+            {
+              "name": "completion_tokens",
+              "value": "={{ $json.completion_tokens }}"
+            },
+            {
+              "name": "total_tokens",
+              "value": "={{ $json.total_tokens }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        512
+      ],
+      "id": "6458e53f-8deb-4b86-b4ae-e696018cc7c5",
+      "name": "Assess Expand Tokens API"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "List Assess Pending API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Assess Pending API": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Each File": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Get Prompt Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prompt Template": {
+      "main": [
+        [
+          {
+            "node": "Start Timer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Timer": {
+      "main": [
+        [
+          {
+            "node": "Call Ollama API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Ollama API": {
+      "main": [
+        [
+          {
+            "node": "Extract Response + Tokens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Response + Tokens": {
+      "main": [
+        [
+          {
+            "node": "Assess Expand Tokens API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assess Expand Tokens API": {
+      "main": [
+        [
+          {
+            "node": "Loop Each File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "7bbc1f5e-0ada-4f4d-bf25-dcdc3e1be228",
+  "meta": {
+    "instanceId": "d5b7a637105e2789991513fc758cd33e8d77299e88fe465fbca853280e12de73"
+  },
+  "id": "xuBPwh9pmw-6zbXDP0JyQ",
+  "tags": []
+}

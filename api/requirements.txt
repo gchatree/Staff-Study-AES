@@ -1,0 +1,8 @@
+httpx
+pandas
+fastapi
+uvicorn
+docxtpl
+pikepdf
+pdf2image
+Pillow
