@@ -53,10 +53,10 @@ During Phase 2 experimental benchmarking, we evaluated two local execution strat
 1. Download and install Native Ollama from [https://ollama.com](https://ollama.com).
 2. Open terminal/command prompt and pull your desired benchmarking model(s):
    ```bash
+   ollama pull qwen3:4b
+   ollama pull gemma4:latest
    ollama pull llama3.1:8b
    ollama pull deepseek-r1:8b
-   ollama pull gemma:7b
-   ollama pull qwen2.5:7b
    ```
 3. Ensure Native Ollama service is active at `http://localhost:11434` (or `http://host.docker.internal:11434` inside Docker containers).
 
@@ -183,10 +183,10 @@ Distributed under the MIT License. See `LICENSE` for more information.
 1. ดาวน์โหลดและติดตั้ง Native Ollama จาก [https://ollama.com](https://ollama.com)
 2. เปิด Terminal/Command Prompt แล้วดาวน์โหลดโมเดลที่ต้องการทดสอบ:
    ```bash
+   ollama pull qwen3:4b
+   ollama pull gemma4:latest
    ollama pull llama3.1:8b
    ollama pull deepseek-r1:8b
-   ollama pull gemma:7b
-   ollama pull qwen2.5:7b
    ```
 3. ตรวจสอบให้แน่ใจว่า Native Ollama ทำงานอยู่ที่พอร์ต `http://localhost:11434` (หรือ `http://host.docker.internal:11434` สำหรับเรียกจากใน Docker)
 

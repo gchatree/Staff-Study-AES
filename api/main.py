@@ -282,25 +282,15 @@ def vision_ocr(payload: VisionOcrPayload):
 
 
 # ─────────────────────────────────────────────
-# [NEW] Pre-process (Google Cloud Vision variant) — Vision OCR via
-# Google Cloud Vision API (files:annotate, synchronous, DOCUMENT_TEXT_DETECTION)
-#
-# *** endpoint ใหม่ทั้งหมด ไม่แตะ /vision-ocr (Gemini) เดิม — workflow
-#     Pre-process เดิมยังใช้ /vision-ocr ได้ตามปกติทุกประการ ***
-#
-# ข้อจำกัดของ Cloud Vision synchronous files:annotate (ตาม doc ทางการ
-# Google, ก.ค. 2026): ประมวลผลได้สูงสุด 5 หน้า/ไฟล์ ถ้าไฟล์เกิน 5 หน้า
-# ต้องใช้ asyncBatchAnnotate (ต้องผ่าน GCS) แทน — endpoint นี้จึงกันไว้
-# ไม่ให้ทำงานกับไฟล์ที่เกิน 5 หน้า (แจ้ง error กลับไปตรงๆ แทนที่จะ
-# ตัดหน้าทิ้งแบบเงียบๆ)
+
 # ─────────────────────────────────────────────
 
 MAX_SYNC_PAGES = 5
 
 class VisionOcrGcvPayload(BaseModel):
     file_path: str
-    #api_key:   str = "AIzaSyA1SM16TxWXA9hMl0bSa3FQ_GHfK-UzgF8"  # default สำหรับ Cloud Vision API (key แยกจาก Gemini)
-    api_key:   str = "AIzaSyC1UzDvedGzqlzM7mKCkTcciLP-S4UFFXs"
+    #api_key:   str = ""  # default สำหรับ Cloud Vision API (key แยกจาก Gemini)
+    api_key:   str = ""
 @app.post("/vision-ocr-gcv")
 def vision_ocr_gcv(payload: VisionOcrGcvPayload):
     try:

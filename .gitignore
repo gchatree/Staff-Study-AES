@@ -1,0 +1,18 @@
+# Secrets
+.env
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# n8n runtime data (do NOT commit encryption key / db)
+n8n_data/
+
+# OS
+.DS_Store
+
+# Raw student documents (privacy - only anonymized/sample data allowed)
+data/raw/
